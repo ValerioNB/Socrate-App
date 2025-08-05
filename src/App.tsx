@@ -94,18 +94,15 @@ const SocrateApp = () => {
     const response = await fetch("/api/gemini", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, model: "gemini-1.5-flash" }),
+      body: JSON.stringify({ prompt }), // Invia solo il prompt
     });
 
     if (!response.ok) {
-      throw new Error(`API Error: ${response.status}`);
+      const errorData = await response.json();
+      throw new Error(errorData.error || `API Error: ${response.status}`);
     }
 
-    const data = await response.json();
-
-    return (
-      data.candidates?.[0]?.content?.parts?.[0]?.text || JSON.stringify(data)
-    );
+    return response.json(); // Il backend restituirà già il JSON pulito
   };
 
   const handleSendMessage = async () => {
@@ -122,18 +119,25 @@ const SocrateApp = () => {
 
       const response = await callGeminiAPI(prompt);
 
-      // 5. Tipizzazione esplicita delle variabili temporanee
       let claudeResponse: ClaudeResponse;
 
       try {
-        const cleanResponse = response.replace(/``````\n?/g, "").trim();
-        claudeResponse = JSON.parse(cleanResponse);
+        // Logica di parsing robusta per estrarre il JSON
+        const jsonMatch = response.match(/```json\n([\s\S]*?)\n```/);
+        if (jsonMatch && jsonMatch[1]) {
+          const jsonString = jsonMatch[1].trim();
+          claudeResponse = JSON.parse(jsonString);
+        } else {
+          // Fallback se non è un blocco JSON, ma potrebbe essere solo JSON
+          claudeResponse = JSON.parse(response.trim());
+        }
       } catch {
+        // Fallback finale se tutto il resto fallisce
         claudeResponse = {
-          response,
+          response: response, // Mostra la risposta grezza come ultima risorsa
           identified_problems: [],
           needs_more_exploration: true,
-          next_question: "Puoi dirmi di più su quello che senti?",
+          next_question: "Puoi elaborare un po' di più?",
         };
       }
 
