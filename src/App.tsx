@@ -12,6 +12,13 @@ import {
   Check,
 } from "lucide-react";
 
+interface Problem {
+  id: number;
+  text: string;
+  status: string;
+  createdAt: string;
+}
+
 //edited da vale "secondo erorri con perplexity"
   type Message = {
   role: string;
@@ -41,7 +48,7 @@ const SocrateApp = () => {
   const [activeTab, setActiveTab] = useState("trova");
   const [userMessage, setUserMessage] = useState("");
  const [conversation, setConversation] = useState<Message[]>([]);
-  const [problems, setProblems] = useState([]);
+ const [problems, setProblems] = useState<Problem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
   const [socrateInput, setSocrateInput] = useState("");
