@@ -172,20 +172,24 @@ IMPORTANTE: Il tuo tono deve essere empatico, non giudicante, ma incisivo nell'a
         );
         setProblems((prev) => [...prev, ...newProblems]);
       }
-    } catch (error) {
-      console.error("Errore nella comunicazione con Claude:", error);
-      setConversation((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: `Mi dispiace, si è verificato un errore: ${error.message}. Verifica la tua API key e riprova.`,
-          identified_problems: [],
-          needs_more_exploration: false,
-        },
-      ]);
-    } finally {
-      setIsLoading(false);
-    }
+      } catch (error) {
+        let errorMsg = "Errore sconosciuto";
+        if (error instanceof Error) {
+         errorMsg = error.message;
+       } else if (typeof error === "string") {
+       errorMsg = error;
+     }
+     setConversation((prev) => [
+       ...prev,
+       {
+         role: "assistant",
+         content: `Mi dispiace, si è verificato un errore: ${errorMsg}. Verifica la tua API key e riprova.`,
+         identified_problems: [],
+           needs_more_exploration: false,
+      },
+     ]);
+}
+
   };
 
   const handleProblemEdit = (problem) => {
