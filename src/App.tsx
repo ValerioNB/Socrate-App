@@ -12,6 +12,7 @@ import {
   Check,
 } from "lucide-react";
 
+// 1. Dichiarazione di tutti i tipi
 interface Problem {
   id: number;
   text: string;
@@ -27,8 +28,7 @@ interface Insight {
   createdAt: string;
 }
 
-//edited da vale "secondo erorri con perplexity"
-  type Message = {
+type Message = {
   role: string;
   content: string;
   identified_problems?: string[];
@@ -51,14 +51,23 @@ type ClaudeResponse = {
   next_question?: string;
 };
 
+type SocrateResponse = {
+    response: string;
+    dialogue_depth: number;
+    core_insight_reached: boolean;
+    final_reflection?: string;
+    ask_for_insight: boolean;
+};
+
 
 const SocrateApp = () => {
+  // 2. Tipizzazione degli useState
   const [activeTab, setActiveTab] = useState("trova");
   const [userMessage, setUserMessage] = useState("");
- const [conversation, setConversation] = useState<Message[]>([]);
- const [problems, setProblems] = useState<Problem[]>([]);
+  const [conversation, setConversation] = useState<Message[]>([]);
+  const [problems, setProblems] = useState<Problem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
+  const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
   const [socrateInput, setSocrateInput] = useState("");
   const [selectedProblem, setSelectedProblem] = useState<Problem | null>(null);
   const [editingProblem, setEditingProblem] = useState<number | null>(null);
@@ -67,6 +76,8 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [insightText, setInsightText] = useState("");
   const [showInsightInput, setShowInsightInput] = useState(false);
+
+  // 3. Tipizzazione dei ref
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const socrateChatEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -79,7 +90,6 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
     socrateChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [socrateChat]);
 
-  // Funzione per chiamare l'API Gemini reale
   const callGeminiAPI = async (prompt: string) => {
     const response = await fetch("/api/gemini", {
       method: "POST",
@@ -93,7 +103,6 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
 
     const data = await response.json();
 
-    // Adattare se necessario in base alla risposta della tua API proxy
     return (
       data.candidates?.[0]?.content?.parts?.[0]?.text || JSON.stringify(data)
     );
@@ -102,7 +111,7 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
   const handleSendMessage = async () => {
     if (!userMessage.trim()) return;
 
-    const newMessage = { role: "user", content: userMessage };
+    const newMessage: Message = { role: "user", content: userMessage };
     const updatedConversation = [...conversation, newMessage];
     setConversation(updatedConversation);
     setUserMessage("");
@@ -113,13 +122,13 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
 
       const response = await callGeminiAPI(prompt);
 
+      // 5. Tipizzazione esplicita delle variabili temporanee
       let claudeResponse: ClaudeResponse;
 
       try {
         const cleanResponse = response.replace(/``````\n?/g, "").trim();
         claudeResponse = JSON.parse(cleanResponse);
       } catch {
-        // Se non è JSON, usa la risposta testuale
         claudeResponse = {
           response,
           identified_problems: [],
@@ -138,22 +147,21 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
         },
       ]);
 
-      // Aggiungi problemi identificati alla lista
       if (
         claudeResponse.identified_problems &&
         claudeResponse.identified_problems.length > 0
       ) {
-        const newProblems = claudeResponse.identified_problems.map(
-          (problem) => ({
+        const newProblems: Problem[] = claudeResponse.identified_problems.map(
+          (problemText: string) => ({
             id: Date.now() + Math.random(),
-            text: problem,
+            text: problemText,
             status: "pending",
             createdAt: new Date().toISOString(),
           })
         );
         setProblems((prev) => [...prev, ...newProblems]);
       }
-      } catch (error) {
+    } catch (error) { // 6. Correzione dei catch
         let errorMsg = "Errore sconosciuto";
         if (error instanceof Error) {
          errorMsg = error.message;
@@ -169,10 +177,12 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
            needs_more_exploration: false,
       },
      ]);
-}
-
+    } finally {
+        setIsLoading(false);
+    }
   };
 
+  // 4. Tipizzazione dei parametri delle funzioni
   const handleProblemEdit = (problem: Problem) => {
     setEditingProblem(problem.id);
     setTempProblemText(problem.text);
@@ -206,7 +216,7 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
   const handleSocrateSend = async () => {
     if (!socrateInput.trim() || !selectedProblem) return;
 
-    const newMessage = { role: "user", content: socrateInput };
+    const newMessage: SocrateMessage = { role: "user", content: socrateInput };
     const updatedChat = [...socrateChat, newMessage];
     setSocrateChat(updatedChat);
     setSocrateInput("");
@@ -218,7 +228,9 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
       }"\n\nCONVERSAZIONE COMPLETA:\n${JSON.stringify(updatedChat)}\n\nCARATTERISTICHE DEL TUO APPROCCIO:\n- NON consoli. NON giudichi. NON dici cosa deve fare.\n- Ti ascolti. Osservi. Poi fai domande precise, taglienti, gentili.\n- Non serve a far stare meglio. Serve a far **pensare più a fondo**.\n- Sei un fratello maggiore, un po' severo ma giusto.\n- Credi talmente tanto nella persona da non lasciarla scappare.\n\nSTRUTTURA DEL DIALOGO - I 5 PERCHÉ:\n1. Dopo ogni risposta, non ripeti meccanicamente "perché"\n2. Ogni domanda è una cesellatura, non un colpo di martello\n3. Esempi di transizioni:\n   - "Interessante… e perché questo per te è così importante?"\n   - "Hai mai pensato se dietro questo ci fosse qualcos'altro?"\n   - "E se fosse solo una parte della verità?"\n   - "Cosa succederebbe se non fosse così?"\n   - "Chi ti ha insegnato a pensare in questo modo?"\n   - "E se stessi solo proteggendo una parte di te?"\n\nOBIETTIVO: Portare la persona alla radice del suo pensiero entro il 4°-5° scambio.\nSpesso dietro il problema iniziale si nasconde una ferita, una paura, una credenza errata, un'abitudine protettiva.\n\nIMPORTANTE - GESTIONE DEL QUINTO PERCHÉ:\n- Se siamo al 5° scambio (dialogue_depth = 5), NON fare un'altra domanda\n- Invece, riconosci che abbiamo raggiunto il cuore del problema\n- Invita l'utente a scrivere la sua nuova consapevolezza in una frase\n- Usa questo testo: "Invita l'utente a **scrivere la sua nuova consapevolezza** in una frase. Come fosse un diario segreto. Perché una verità capita… è una verità che resta."\n\nRISPONDI CON UN JSON:\n{\n  "response": "La tua risposta socratica, una domanda penetrante ma gentile (se depth < 5) OPPURE l'invito a scrivere la consapevolezza (se depth = 5)",\n  "dialogue_depth": numero_da_1_a_5,\n  "core_insight_reached": true/false,\n  "final_reflection": "se core_insight_reached è true, una frase finale di riflessione",\n  "ask_for_insight": true/false (true se depth = 5)\n}\n\nIMPORTANTE: Parla come Socrate, in prima persona. Sii diretto ma rispettoso. NON INCLUDERE BACKTICKS O ALTRO TESTO OLTRE AL JSON.\n`;
 
       const response = await callGeminiAPI(prompt);
-      let socrateResponse;
+      
+      // 5. Tipizzazione esplicita delle variabili temporanee
+      let socrateResponse: SocrateResponse;
 
       try {
         const cleanResponse = response
@@ -247,18 +259,17 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
         },
       ]);
 
-      // Se Socrate chiede di scrivere la consapevolezza, mostra l'input
       if (socrateResponse.ask_for_insight) {
         setShowInsightInput(true);
       }
-    } catch (error) {
+    } catch (error) { // 6. Correzione dei catch
         let errorMsg = "Errore sconosciuto";
         if (error instanceof Error) {
          errorMsg = error.message;
        } else if (typeof error === "string") {
        errorMsg = error;
      }
-      console.error("Errore nella comunicazione con Socrate:", error);
+      console.error("Errore nella comunicazione con Socrate:", errorMsg);
       setSocrateChat((prev) => [
         ...prev,
         {
@@ -288,7 +299,6 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
     setInsightText("");
     setShowInsightInput(false);
 
-    // Aggiungi un messaggio di ringraziamento da Socrate
     setSocrateChat((prev) => [
       ...prev,
       {
@@ -326,7 +336,6 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
     content += `Data: ${dateStr} - Ora: ${timeStr}\n`;
     content += `${"=".repeat(50)}\n\n`;
 
-    // Sezione Problemi
     content += `📋 PROBLEMI IDENTIFICATI (${problems.length})\n`;
     content += `${"=".repeat(30)}\n\n`;
 
@@ -342,12 +351,11 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
       });
     }
 
-    // Sezione Conversazione Root Cause Analysis
     if (conversation.length > 0) {
       content += `💭 CONVERSAZIONE - TROVA IL PROBLEMA\n`;
       content += `${"=".repeat(40)}\n\n`;
 
-      conversation.forEach((message, index) => {
+      conversation.forEach((message) => {
         const speaker =
           message.role === "user" ? "TU" : "CLAUDE (Root Cause Analysis)";
         content += `[${speaker}]: ${message.content}\n`;
@@ -364,7 +372,6 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
       });
     }
 
-    // Sezione Dialogo con Socrate
     if (socrateChat.length > 0) {
       content += `🏛️ DIALOGO CON SOCRATE\n`;
       content += `${"=".repeat(25)}\n\n`;
@@ -373,7 +380,7 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
         content += `Problema discusso: "${selectedProblem.text}"\n\n`;
       }
 
-      socrateChat.forEach((message, index) => {
+      socrateChat.forEach((message) => {
         const speaker = message.role === "user" ? "TU" : "SOCRATE";
         content += `[${speaker}]: ${message.content}\n`;
 
@@ -384,7 +391,6 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
       });
     }
 
-    // Sezione Consapevolezze
     if (insights.length > 0) {
       content += `✨ CONSAPEVOLEZZE RAGGIUNTE (${insights.length})\n`;
       content += `${"=".repeat(35)}\n\n`;
@@ -398,7 +404,6 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
       });
     }
 
-    // Sezione finale
     content += `\n${"=".repeat(50)}\n`;
     content += `Fine del diario - Continua il tuo viaggio di conoscenza di te stesso.\n`;
     content += `"Una vita senza ricerca non è degna di essere vissuta" - Socrate\n`;
@@ -412,8 +417,14 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
       await navigator.clipboard.writeText(diaryContent);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      console.error("Errore nel copiare il diario:", error);
+    } catch (error) { // 6. Correzione dei catch
+      let errorMsg = "Errore sconosciuto";
+      if (error instanceof Error) {
+        errorMsg = error.message;
+      } else if (typeof error === "string") {
+        errorMsg = error;
+      }
+      console.error("Errore nel copiare il diario:", errorMsg);
     }
   };
 
@@ -545,7 +556,7 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
               <h2 className="text-xl font-semibold mb-4 text-gray-800">
                 Trova il tuo problema
-              </h2>
+              >
               <p className="text-gray-600 mb-6">
                 Racconta quello che senti. Io ti aiuterò a trovare il vero
                 problema alla radice.
@@ -759,8 +770,7 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
                         )}
                       </div>
                     </div>
-                  ))
-                )}
+                  ))}
                 {isLoading && (
                   <div className="flex justify-start">
                     <div className="bg-gray-200 text-gray-800 px-4 py-3 rounded-lg">
