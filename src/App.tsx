@@ -208,7 +208,7 @@ const SocrateApp = () => {
     setSocrateChat([
       {
         role: "socrate",
-        content: `Mh... capisco. Ho letto attentamente il tuo problema: "${problem.text}". \n\nLo prendo sul serio. Non lo sminuisco. \n\nMa dimmi una cosa... **perché** per te questo è un problema?`,
+        content: `Mh... capisco. Ho letto attentamente il tuo problema: \"${problem.text}\". \n\nLo prendo sul serio. Non lo sminuisco. \n\nMa dimmi una cosa... **perché** per te questo è un problema?`,
       },
     ]);
   };
@@ -223,13 +223,12 @@ const SocrateApp = () => {
     setIsLoading(true);
 
     try {
-      const prompt = `\nSei Socrate, il filosofo greco. Stai dialogando con una persona che ha questo problema: "${
+      const prompt = `\nSei Socrate, il filosofo greco. Stai dialogando con una persona che ha questo problema: \"${
         selectedProblem.text
-      }"\n\nCONVERSAZIONE COMPLETA:\n${JSON.stringify(updatedChat)}\n\nCARATTERISTICHE DEL TUO APPROCCIO:\n- NON consoli. NON giudichi. NON dici cosa deve fare.\n- Ti ascolti. Osservi. Poi fai domande precise, taglienti, gentili.\n- Non serve a far stare meglio. Serve a far **pensare più a fondo**.\n- Sei un fratello maggiore, un po' severo ma giusto.\n- Credi talmente tanto nella persona da non lasciarla scappare.\n\nSTRUTTURA DEL DIALOGO - I 5 PERCHÉ:\n1. Dopo ogni risposta, non ripeti meccanicamente "perché"\n2. Ogni domanda è una cesellatura, non un colpo di martello\n3. Esempi di transizioni:\n   - "Interessante… e perché questo per te è così importante?"\n   - "Hai mai pensato se dietro questo ci fosse qualcos'altro?"\n   - "E se fosse solo una parte della verità?"\n   - "Cosa succederebbe se non fosse così?"\n   - "Chi ti ha insegnato a pensare in questo modo?"\n   - "E se stessi solo proteggendo una parte di te?"\n\nOBIETTIVO: Portare la persona alla radice del suo pensiero entro il 4°-5° scambio.\nSpesso dietro il problema iniziale si nasconde una ferita, una paura, una credenza errata, un'abitudine protettiva.\n\nIMPORTANTE - GESTIONE DEL QUINTO PERCHÉ:\n- Se siamo al 5° scambio (dialogue_depth = 5), NON fare un'altra domanda\n- Invece, riconosci che abbiamo raggiunto il cuore del problema\n- Invita l'utente a scrivere la sua nuova consapevolezza in una frase\n- Usa questo testo: "Invita l'utente a **scrivere la sua nuova consapevolezza** in una frase. Come fosse un diario segreto. Perché una verità capita… è una verità che resta."\n\nRISPONDI CON UN JSON:\n{\n  "response": "La tua risposta socratica, una domanda penetrante ma gentile (se depth < 5) OPPURE l'invito a scrivere la consapevolezza (se depth = 5)",\n  "dialogue_depth": numero_da_1_a_5,\n  "core_insight_reached": true/false,\n  "final_reflection": "se core_insight_reached è true, una frase finale di riflessione",\n  "ask_for_insight": true/false (true se depth = 5)\n}\n\nIMPORTANTE: Parla come Socrate, in prima persona. Sii diretto ma rispettoso. NON INCLUDERE BACKTICKS O ALTRO TESTO OLTRE AL JSON.\n`;
+      }\"\n\nCONVERSAZIONE COMPLETA:\n${JSON.stringify(updatedChat)}\n\nCARATTERISTICHE DEL TUO APPROCCIO:\n- NON consoli. NON giudichi. NON dici cosa deve fare.\n- Ti ascolti. Osservi. Poi fai domande precise, taglienti, gentili.\n- Non serve a far stare meglio. Serve a far **pensare più a fondo**.\n- Sei un fratello maggiore, un po' severo ma giusto.\n- Credi talmente tanto nella persona da non lasciarla scappare.\n\nSTRUTTURA DEL DIALOGO - I 5 PERCHÉ:\n1. Dopo ogni risposta, non ripeti meccanicamente "perché"\n2. Ogni domanda è una cesellatura, non un colpo di martello\n3. Esempi di transizioni:\n   - "Interessante… e perché questo per te è così importante?"\n   - "Hai mai pensato se dietro questo ci fosse qualcos'altro?"\n   - "E se fosse solo una parte della verità?"\n   - "Cosa succederebbe se non fosse così?"\n   - "Chi ti ha insegnato a pensare in questo modo?"\n   - "E se stessi solo proteggendo una parte di te?"\n\nOBIETTIVO: Portare la persona alla radice del suo pensiero entro il 4°-5° scambio.\nSpesso dietro il problema iniziale si nasconde una ferita, una paura, una credenza errata, un'abitudine protettiva.\n\nIMPORTANTE - GESTIONE DEL QUINTO PERCHÉ:\n- Se siamo al 5° scambio (dialogue_depth = 5), NON fare un'altra domanda\n- Invece, riconosci che abbiamo raggiunto il cuore del problema\n- Invita l'utente a scrivere la sua nuova consapevolezza in una frase\n- Usa questo testo: "Invita l'utente a **scrivere la sua nuova consapevolezza** in una frase. Come fosse un diario segreto. Perché una verità capita… è una verità che resta."\n\nRISPONDI CON UN JSON:\n{\n  "response": "La tua risposta socratica, una domanda penetrante ma gentile (se depth < 5) OPPURE l'invito a scrivere la consapevolezza (se depth = 5)",\n  "dialogue_depth": numero_da_1_a_5,\n  "core_insight_reached": true/false,\n  "final_reflection": "se core_insight_reached è true, una frase finale di riflessione",\n  "ask_for_insight": true/false (true se depth = 5)\n}\n\nIMPORTANTE: Parla come Socrate, in prima persona. Sii diretto ma rispettoso. NON INCLUDERE BACKTICKS O ALTRO TESTO OLTRE AL JSON.\n`;
 
       const response = await callGeminiAPI(prompt);
       
-      // 5. Tipizzazione esplicita delle variabili temporanee
       let socrateResponse: SocrateResponse;
 
       try {
@@ -303,7 +302,7 @@ const SocrateApp = () => {
       ...prev,
       {
         role: "socrate",
-        content: `Perfetto. Ora che hai scritto la tua consapevolezza, è diventata parte di te. Ricorda: "La saggezza inizia nella meraviglia." \n\nSe vuoi, puoi continuare a parlare con me o riflettere su quello che hai scoperto.`,
+        content: `Perfetto. Ora che hai scritto la tua consapevolezza, è diventata parte di te. Ricorda: \"La saggezza inizia nella meraviglia.\" \n\nSe vuoi, puoi continuare a parlare con me o riflettere su quello che hai scoperto.`,
         dialogue_depth: 6,
         core_insight_reached: true,
         final_reflection:
@@ -377,7 +376,7 @@ const SocrateApp = () => {
       content += `${"=".repeat(25)}\n\n`;
 
       if (selectedProblem) {
-        content += `Problema discusso: "${selectedProblem.text}"\n\n`;
+        content += `Problema discusso: \"${selectedProblem.text}\"\n\n`;
       }
 
       socrateChat.forEach((message) => {
@@ -396,7 +395,7 @@ const SocrateApp = () => {
       content += `${"=".repeat(35)}\n\n`;
 
       insights.forEach((insight, index) => {
-        content += `${index + 1}. "${insight.text}"\n`;
+        content += `${index + 1}. \"${insight.text}\"\n`;
         content += `   Problema: ${insight.problemText}\n`;
         content += `   Data: ${new Date(insight.createdAt).toLocaleString(
           "it-IT"
@@ -406,7 +405,7 @@ const SocrateApp = () => {
 
     content += `\n${"=".repeat(50)}\n`;
     content += `Fine del diario - Continua il tuo viaggio di conoscenza di te stesso.\n`;
-    content += `"Una vita senza ricerca non è degna di essere vissuta" - Socrate\n`;
+    content += `\"Una vita senza ricerca non è degna di essere vissuta\" - Socrate\n`;
 
     return content;
   };
@@ -556,7 +555,7 @@ const SocrateApp = () => {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
               <h2 className="text-xl font-semibold mb-4 text-gray-800">
                 Trova il tuo problema
-              >
+              </h2>
               <p className="text-gray-600 mb-6">
                 Racconta quello che senti. Io ti aiuterò a trovare il vero
                 problema alla radice.
@@ -619,7 +618,8 @@ const SocrateApp = () => {
           </div>
         )}
 
-        {activeTab === "problemi" && (
+        {
+          activeTab === "problemi" && (
           <div className="max-w-4xl mx-auto">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h2 className="text-xl font-semibold mb-4 text-gray-800">
@@ -770,7 +770,8 @@ const SocrateApp = () => {
                         )}
                       </div>
                     </div>
-                  ))}
+                  ))
+                )}
                 {isLoading && (
                   <div className="flex justify-start">
                     <div className="bg-gray-200 text-gray-800 px-4 py-3 rounded-lg">
