@@ -15,10 +15,10 @@ import {
 const SocrateApp = () => {
   const [activeTab, setActiveTab] = useState("trova");
   const [userMessage, setUserMessage] = useState("");
-  const [conversation, setConversation] = useState([]);
+ const [conversation, setConversation] = useState<Message[]>([]);
   const [problems, setProblems] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [socrateChat, setSocrateChat] = useState([]);
+const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
   const [socrateInput, setSocrateInput] = useState("");
   const [selectedProblem, setSelectedProblem] = useState(null);
   const [editingProblem, setEditingProblem] = useState(null);
@@ -29,6 +29,23 @@ const SocrateApp = () => {
   const [showInsightInput, setShowInsightInput] = useState(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const socrateChatEndRef = useRef<HTMLDivElement | null>(null);
+
+//edited da vale "secondo erorri con perplexity"
+  type Message = {
+  role: string;
+  content: string;
+  identified_problems?: string[];
+  needs_more_exploration?: boolean;
+};
+
+type SocrateMessage = {
+  role: string;
+  content: string;
+  dialogue_depth?: number;
+  core_insight_reached?: boolean;
+  final_reflection?: string;
+  ask_for_insight?: boolean;
+};
 
 
   useEffect(() => {
