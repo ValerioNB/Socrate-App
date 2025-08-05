@@ -12,6 +12,31 @@ import {
   Check,
 } from "lucide-react";
 
+//edited da vale "secondo erorri con perplexity"
+  type Message = {
+  role: string;
+  content: string;
+  identified_problems?: string[];
+  needs_more_exploration?: boolean;
+};
+
+type SocrateMessage = {
+  role: string;
+  content: string;
+  dialogue_depth?: number;
+  core_insight_reached?: boolean;
+  final_reflection?: string;
+  ask_for_insight?: boolean;
+};
+
+type ClaudeResponse = {
+  response: string;
+  identified_problems: string[];
+  needs_more_exploration: boolean;
+  next_question?: string;
+};
+
+
 const SocrateApp = () => {
   const [activeTab, setActiveTab] = useState("trova");
   const [userMessage, setUserMessage] = useState("");
@@ -29,23 +54,6 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
   const [showInsightInput, setShowInsightInput] = useState(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const socrateChatEndRef = useRef<HTMLDivElement | null>(null);
-
-//edited da vale "secondo erorri con perplexity"
-  type Message = {
-  role: string;
-  content: string;
-  identified_problems?: string[];
-  needs_more_exploration?: boolean;
-};
-
-type SocrateMessage = {
-  role: string;
-  content: string;
-  dialogue_depth?: number;
-  core_insight_reached?: boolean;
-  final_reflection?: string;
-  ask_for_insight?: boolean;
-};
 
 
   useEffect(() => {
@@ -117,7 +125,8 @@ IMPORTANTE: Il tuo tono deve essere empatico, non giudicante, ma incisivo nell'a
 
       const response = await callGeminiAPI(prompt);
 
-      let claudeResponse;
+      let claudeResponse: ClaudeResponse;
+
       try {
         const cleanResponse = response.replace(/``````\n?/g, "").trim();
         claudeResponse = JSON.parse(cleanResponse);
