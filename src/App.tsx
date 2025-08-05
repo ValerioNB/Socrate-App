@@ -27,8 +27,9 @@ const SocrateApp = () => {
   const [insights, setInsights] = useState([]);
   const [insightText, setInsightText] = useState("");
   const [showInsightInput, setShowInsightInput] = useState(false);
-  const chatEndRef = useRef(null);
-  const socrateChatEndRef = useRef(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const socrateChatEndRef = useRef<HTMLDivElement | null>(null);
+
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
