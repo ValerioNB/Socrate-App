@@ -19,6 +19,14 @@ interface Problem {
   createdAt: string;
 }
 
+interface Insight {
+  id: number;
+  text: string;
+  problemId: number;
+  problemText: string;
+  createdAt: string;
+}
+
 //edited da vale "secondo erorri con perplexity"
   type Message = {
   role: string;
@@ -52,11 +60,11 @@ const SocrateApp = () => {
   const [isLoading, setIsLoading] = useState(false);
 const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
   const [socrateInput, setSocrateInput] = useState("");
-  const [selectedProblem, setSelectedProblem] = useState(null);
-  const [editingProblem, setEditingProblem] = useState(null);
+  const [selectedProblem, setSelectedProblem] = useState<Problem | null>(null);
+  const [editingProblem, setEditingProblem] = useState<number | null>(null);
   const [tempProblemText, setTempProblemText] = useState("");
   const [copied, setCopied] = useState(false);
-  const [insights, setInsights] = useState([]);
+  const [insights, setInsights] = useState<Insight[]>([]);
   const [insightText, setInsightText] = useState("");
   const [showInsightInput, setShowInsightInput] = useState(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -101,34 +109,7 @@ const [socrateChat, setSocrateChat] = useState<SocrateMessage[]>([]);
     setIsLoading(true);
 
     try {
-      const prompt = `
-Agisci come un **Root Cause Analysis** esperto. Il tuo compito è aiutare l'utente a identificare i veri problemi alla radice delle sue difficoltà.
-
-CONVERSAZIONE COMPLETA FINO AD ORA:
-${JSON.stringify(updatedConversation)}
-
-ISTRUZIONI SPECIFICHE:
-1. Ascolta attentamente frasi-trappola emotive come:
-   - "Ogni volta che mi metto lì, qualcosa mi blocca"
-   - "Penso che sia colpa mia se..."
-   - "So cosa dovrei fare, ma non riesco"
-   - Altre espressioni di blocco emotivo o mentale
-
-2. Fai domande mirate per scavare più a fondo nel problema reale
-3. Non accontentarti della superficie - cerca la vera causa
-4. Quando identifichi un problema specifico, formulalo in modo chiaro e preciso
-5. Se l'utente ha più problemi, aiutalo a identificarli tutti
-
-RISPONDI CON UN JSON che contenga:
-{
-  "response": "La tua risposta empatica e di supporto all'utente",
-  "identified_problems": ["array di problemi identificati in questa conversazione, formulati in modo preciso"],
-  "needs_more_exploration": true/false,
-  "next_question": "Domanda specifica per approfondire, se needs_more_exploration è true"
-}
-
-IMPORTANTE: Il tuo tono deve essere empatico, non giudicante, ma incisivo nell'aiutare a scoprire i veri problemi. NON INCLUDERE BACKTICKS O ALTRO TESTO OLTRE AL JSON.
-`;
+      const prompt = `\nAgisci come un **Root Cause Analysis** esperto. Il tuo compito è aiutare l'utente a identificare i veri problemi alla radice delle sue difficoltà.\n\nCONVERSAZIONE COMPLETA FINO AD ORA:\n${JSON.stringify(updatedConversation)}\n\nISTRUZIONI SPECIFICHE:\n1. Ascolta attentamente frasi-trappola emotive come:\n   - "Ogni volta che mi metto lì, qualcosa mi blocca"\n   - "Penso che sia colpa mia se..."\n   - "So cosa dovrei fare, ma non riesco"\n   - Altre espressioni di blocco emotivo o mentale\n\n2. Fai domande mirate per scavare più a fondo nel problema reale\n3. Non accontentarti della superficie - cerca la vera causa\n4. Quando identifichi un problema specifico, formulalo in modo chiaro e preciso\n5. Se l'utente ha più problemi, aiutalo a identificarli tutti\n\nRISPONDI CON UN JSON che contenga:\n{\n  "response": "La tua risposta empatica e di supporto all'utente",\n  "identified_problems": ["array di problemi identificati in questa conversazione, formulati in modo preciso"],\n  "needs_more_exploration": true/false,\n  "next_question": "Domanda specifica per approfondire, se needs_more_exploration è true"\n}\n\nIMPORTANTE: Il tuo tono deve essere empatico, non giudicante, ma incisivo nell'aiutare a scoprire i veri problemi. NON INCLUDERE BACKTICKS O ALTRO TESTO OLTRE AL JSON.\n`;
 
       const response = await callGeminiAPI(prompt);
 
@@ -192,12 +173,12 @@ IMPORTANTE: Il tuo tono deve essere empatico, non giudicante, ma incisivo nell'a
 
   };
 
-  const handleProblemEdit = (problem) => {
+  const handleProblemEdit = (problem: Problem) => {
     setEditingProblem(problem.id);
     setTempProblemText(problem.text);
   };
 
-  const handleProblemSave = (problemId) => {
+  const handleProblemSave = (problemId: number) => {
     setProblems((prev) =>
       prev.map((p) =>
         p.id === problemId ? { ...p, text: tempProblemText } : p
@@ -207,11 +188,11 @@ IMPORTANTE: Il tuo tono deve essere empatico, non giudicante, ma incisivo nell'a
     setTempProblemText("");
   };
 
-  const handleProblemDelete = (problemId) => {
+  const handleProblemDelete = (problemId: number) => {
     setProblems((prev) => prev.filter((p) => p.id !== problemId));
   };
 
-  const startSocrateChat = (problem) => {
+  const startSocrateChat = (problem: Problem) => {
     setSelectedProblem(problem);
     setActiveTab("socrate");
     setSocrateChat([
@@ -223,7 +204,7 @@ IMPORTANTE: Il tuo tono deve essere empatico, non giudicante, ma incisivo nell'a
   };
 
   const handleSocrateSend = async () => {
-    if (!socrateInput.trim()) return;
+    if (!socrateInput.trim() || !selectedProblem) return;
 
     const newMessage = { role: "user", content: socrateInput };
     const updatedChat = [...socrateChat, newMessage];
@@ -232,54 +213,11 @@ IMPORTANTE: Il tuo tono deve essere empatico, non giudicante, ma incisivo nell'a
     setIsLoading(true);
 
     try {
-      const prompt = `
-Sei Socrate, il filosofo greco. Stai dialogando con una persona che ha questo problema: "${
+      const prompt = `\nSei Socrate, il filosofo greco. Stai dialogando con una persona che ha questo problema: "${
         selectedProblem.text
-      }"
+      }"\n\nCONVERSAZIONE COMPLETA:\n${JSON.stringify(updatedChat)}\n\nCARATTERISTICHE DEL TUO APPROCCIO:\n- NON consoli. NON giudichi. NON dici cosa deve fare.\n- Ti ascolti. Osservi. Poi fai domande precise, taglienti, gentili.\n- Non serve a far stare meglio. Serve a far **pensare più a fondo**.\n- Sei un fratello maggiore, un po' severo ma giusto.\n- Credi talmente tanto nella persona da non lasciarla scappare.\n\nSTRUTTURA DEL DIALOGO - I 5 PERCHÉ:\n1. Dopo ogni risposta, non ripeti meccanicamente "perché"\n2. Ogni domanda è una cesellatura, non un colpo di martello\n3. Esempi di transizioni:\n   - "Interessante… e perché questo per te è così importante?"\n   - "Hai mai pensato se dietro questo ci fosse qualcos'altro?"\n   - "E se fosse solo una parte della verità?"\n   - "Cosa succederebbe se non fosse così?"\n   - "Chi ti ha insegnato a pensare in questo modo?"\n   - "E se stessi solo proteggendo una parte di te?"\n\nOBIETTIVO: Portare la persona alla radice del suo pensiero entro il 4°-5° scambio.\nSpesso dietro il problema iniziale si nasconde una ferita, una paura, una credenza errata, un'abitudine protettiva.\n\nIMPORTANTE - GESTIONE DEL QUINTO PERCHÉ:\n- Se siamo al 5° scambio (dialogue_depth = 5), NON fare un'altra domanda\n- Invece, riconosci che abbiamo raggiunto il cuore del problema\n- Invita l'utente a scrivere la sua nuova consapevolezza in una frase\n- Usa questo testo: "Invita l'utente a **scrivere la sua nuova consapevolezza** in una frase. Come fosse un diario segreto. Perché una verità capita… è una verità che resta."\n\nRISPONDI CON UN JSON:\n{\n  "response": "La tua risposta socratica, una domanda penetrante ma gentile (se depth < 5) OPPURE l'invito a scrivere la consapevolezza (se depth = 5)",\n  "dialogue_depth": numero_da_1_a_5,\n  "core_insight_reached": true/false,\n  "final_reflection": "se core_insight_reached è true, una frase finale di riflessione",\n  "ask_for_insight": true/false (true se depth = 5)\n}\n\nIMPORTANTE: Parla come Socrate, in prima persona. Sii diretto ma rispettoso. NON INCLUDERE BACKTICKS O ALTRO TESTO OLTRE AL JSON.\n`;
 
-CONVERSAZIONE COMPLETA:
-${JSON.stringify(updatedChat)}
-
-CARATTERISTICHE DEL TUO APPROCCIO:
-- NON consoli. NON giudichi. NON dici cosa deve fare.
-- Ti ascolti. Osservi. Poi fai domande precise, taglienti, gentili.
-- Non serve a far stare meglio. Serve a far **pensare più a fondo**.
-- Sei un fratello maggiore, un po' severo ma giusto.
-- Credi talmente tanto nella persona da non lasciarla scappare.
-
-STRUTTURA DEL DIALOGO - I 5 PERCHÉ:
-1. Dopo ogni risposta, non ripeti meccanicamente "perché"
-2. Ogni domanda è una cesellatura, non un colpo di martello
-3. Esempi di transizioni:
-   - "Interessante… e perché questo per te è così importante?"
-   - "Hai mai pensato se dietro questo ci fosse qualcos'altro?"
-   - "E se fosse solo una parte della verità?"
-   - "Cosa succederebbe se non fosse così?"
-   - "Chi ti ha insegnato a pensare in questo modo?"
-   - "E se stessi solo proteggendo una parte di te?"
-
-OBIETTIVO: Portare la persona alla radice del suo pensiero entro il 4°-5° scambio.
-Spesso dietro il problema iniziale si nasconde una ferita, una paura, una credenza errata, un'abitudine protettiva.
-
-IMPORTANTE - GESTIONE DEL QUINTO PERCHÉ:
-- Se siamo al 5° scambio (dialogue_depth = 5), NON fare un'altra domanda
-- Invece, riconosci che abbiamo raggiunto il cuore del problema
-- Invita l'utente a scrivere la sua nuova consapevolezza in una frase
-- Usa questo testo: "Invita l'utente a **scrivere la sua nuova consapevolezza** in una frase. Come fosse un diario segreto. Perché una verità capita… è una verità che resta."
-
-RISPONDI CON UN JSON:
-{
-  "response": "La tua risposta socratica, una domanda penetrante ma gentile (se depth < 5) OPPURE l'invito a scrivere la consapevolezza (se depth = 5)",
-  "dialogue_depth": numero_da_1_a_5,
-  "core_insight_reached": true/false,
-  "final_reflection": "se core_insight_reached è true, una frase finale di riflessione",
-  "ask_for_insight": true/false (true se depth = 5)
-}
-
-IMPORTANTE: Parla come Socrate, in prima persona. Sii diretto ma rispettoso. NON INCLUDERE BACKTICKS O ALTRO TESTO OLTRE AL JSON.
-`;
-
-      const response = await callAnthropicAPI(prompt);
+      const response = await callGeminiAPI(prompt);
       let socrateResponse;
 
       try {
@@ -314,12 +252,18 @@ IMPORTANTE: Parla come Socrate, in prima persona. Sii diretto ma rispettoso. NON
         setShowInsightInput(true);
       }
     } catch (error) {
+        let errorMsg = "Errore sconosciuto";
+        if (error instanceof Error) {
+         errorMsg = error.message;
+       } else if (typeof error === "string") {
+       errorMsg = error;
+     }
       console.error("Errore nella comunicazione con Socrate:", error);
       setSocrateChat((prev) => [
         ...prev,
         {
           role: "socrate",
-          content: `Mi dispiace, qualcosa è andato storto: ${error.message}`,
+          content: `Mi dispiace, qualcosa è andato storto: ${errorMsg}`,
           dialogue_depth: 1,
           core_insight_reached: false,
         },
@@ -330,9 +274,9 @@ IMPORTANTE: Parla come Socrate, in prima persona. Sii diretto ma rispettoso. NON
   };
 
   const handleSaveInsight = () => {
-    if (!insightText.trim()) return;
+    if (!insightText.trim() || !selectedProblem) return;
 
-    const newInsight = {
+    const newInsight: Insight = {
       id: Date.now(),
       text: insightText,
       problemId: selectedProblem.id,
@@ -358,7 +302,7 @@ IMPORTANTE: Parla come Socrate, in prima persona. Sii diretto ma rispettoso. NON
     ]);
   };
 
-  const handleKeyPress = (e, type) => {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>, type: "trova" | "socrate") => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (type === "trova") {
