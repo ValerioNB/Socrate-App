@@ -12,7 +12,7 @@ import {
   Check,
 } from "lucide-react";
 
-// 1. Dichiarazione di tutti i tipi
+// 1. Tipi e Interfacce
 interface Problem {
   id: number;
   text: string;
@@ -52,16 +52,15 @@ type ClaudeResponse = {
 };
 
 type SocrateResponse = {
-    response: string;
-    dialogue_depth: number;
-    core_insight_reached: boolean;
-    final_reflection?: string;
-    ask_for_insight: boolean;
+  response: string;
+  dialogue_depth: number;
+  core_insight_reached: boolean;
+  final_reflection?: string;
+  ask_for_insight: boolean;
 };
 
-
 const SocrateApp = () => {
-  // 2. Tipizzazione degli useState
+  // 2. Stati dell'applicazione
   const [activeTab, setActiveTab] = useState("trova");
   const [userMessage, setUserMessage] = useState("");
   const [conversation, setConversation] = useState<Message[]>([]);
@@ -77,10 +76,9 @@ const SocrateApp = () => {
   const [insightText, setInsightText] = useState("");
   const [showInsightInput, setShowInsightInput] = useState(false);
 
-  // 3. Tipizzazione dei ref
+  // 3. Ref per lo scroll automatico
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const socrateChatEndRef = useRef<HTMLDivElement | null>(null);
-
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -90,54 +88,56 @@ const SocrateApp = () => {
     socrateChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [socrateChat]);
 
-  const callGeminiAPI = async (prompt: string) => {
+  // Funzione per chiamare il backend (Serverless Function)
+  const callGeminiAPI = async (prompt: string): Promise<string> => {
     const response = await fetch("/api/gemini", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt }), // Invia solo il prompt
+      body: JSON.stringify({ prompt, model: "gemini-1.5-flash" }),
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || `API Error: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`API Error: ${response.status} - ${errorText}`);
     }
 
-    return response.json(); // Il backend restituirà già il JSON pulito
+    // Il backend di Vercel restituisce una risposta, che qui leggiamo come testo grezzo
+    // perché può contenere il JSON wrappato in markdown.
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || JSON.stringify(data);
   };
 
   const handleSendMessage = async () => {
     if (!userMessage.trim()) return;
 
     const newMessage: Message = { role: "user", content: userMessage };
-    const updatedConversation = [...conversation, newMessage];
-    setConversation(updatedConversation);
+    setConversation((prev) => [...prev, newMessage]);
     setUserMessage("");
     setIsLoading(true);
 
     try {
-      const prompt = `\nAgisci come un **Root Cause Analysis** esperto. Il tuo compito è aiutare l'utente a identificare i veri problemi alla radice delle sue difficoltà.\n\nCONVERSAZIONE COMPLETA FINO AD ORA:\n${JSON.stringify(updatedConversation)}\n\nISTRUZIONI SPECIFICHE:\n1. Ascolta attentamente frasi-trappola emotive come:\n   - "Ogni volta che mi metto lì, qualcosa mi blocca"\n   - "Penso che sia colpa mia se..."\n   - "So cosa dovrei fare, ma non riesco"\n   - Altre espressioni di blocco emotivo o mentale\n\n2. Fai domande mirate per scavare più a fondo nel problema reale\n3. Non accontentarti della superficie - cerca la vera causa\n4. Quando identifichi un problema specifico, formulalo in modo chiaro e preciso\n5. Se l'utente ha più problemi, aiutalo a identificarli tutti\n\nRISPONDI CON UN JSON che contenga:\n{\n  "response": "La tua risposta empatica e di supporto all'utente",\n  "identified_problems": ["array di problemi identificati in questa conversazione, formulati in modo preciso"],\n  "needs_more_exploration": true/false,\n  "next_question": "Domanda specifica per approfondire, se needs_more_exploration è true"\n}\n\nIMPORTANTE: Il tuo tono deve essere empatico, non giudicante, ma incisivo nell'aiutare a scoprire i veri problemi. NON INCLUDERE BACKTICKS O ALTRO TESTO OLTRE AL JSON.\n`;
+      const fullPrompt = `\nAgisci come un **Root Cause Analysis** esperto. Il tuo compito è aiutare l'utente a identificare i veri problemi alla radice delle sue difficoltà.\n\nCONVERSAZIONE COMPLETA FINO AD ORA:\n${JSON.stringify([...conversation, newMessage])}\n\nISTRUZIONI SPECIFICHE:\n1. Ascolta attentamente frasi-trappola emotive.\n2. Fai domande mirate per scavare più a fondo.\n3. Non accontentarti della superficie.\n4. Quando identifichi un problema, formulalo in modo chiaro e preciso.\n\nRISPONDI SEMPRE E SOLO CON UN JSON che contenga:\n{\n  "response": "La tua risposta empatica e di supporto all'utente",\n  "identified_problems": ["array di problemi identificati, formulati in modo preciso"],\n  "needs_more_exploration": true/false,\n  "next_question": "Domanda specifica per approfondire, se needs_more_exploration è true"\n}\n\nIMPORTANTE: La tua risposta DEVE essere solo il JSON, senza markdown, backticks o altro testo.\n`;
 
-      const response = await callGeminiAPI(prompt);
+      const rawResponse = await callGeminiAPI(fullPrompt);
 
       let claudeResponse: ClaudeResponse;
 
       try {
-        // Logica di parsing robusta per estrarre il JSON
-        const jsonMatch = response.match(/```json\n([\s\S]*?)\n```/);
-        if (jsonMatch && jsonMatch[1]) {
-          const jsonString = jsonMatch[1].trim();
-          claudeResponse = JSON.parse(jsonString);
-        } else {
-          // Fallback se non è un blocco JSON, ma potrebbe essere solo JSON
-          claudeResponse = JSON.parse(response.trim());
+        // Logica di parsing robusta: cerca il JSON all'interno della stringa di risposta
+        const startIndex = rawResponse.indexOf('{');
+        const endIndex = rawResponse.lastIndexOf('}');
+        if (startIndex === -1 || endIndex === -1) {
+          throw new Error("Risposta non valida, JSON non trovato.");
         }
-      } catch {
-        // Fallback finale se tutto il resto fallisce
+        const jsonString = rawResponse.substring(startIndex, endIndex + 1);
+        claudeResponse = JSON.parse(jsonString);
+      } catch (error) {
+        console.error("Errore di parsing JSON:", error);
+        // Se il parsing fallisce, crea una risposta di errore da mostrare all'utente
         claudeResponse = {
-          response: response, // Mostra la risposta grezza come ultima risorsa
+          response: `Ho ricevuto una risposta in un formato non valido. Contenuto: ${rawResponse}`,
           identified_problems: [],
-          needs_more_exploration: true,
-          next_question: "Puoi elaborare un po' di più?",
+          needs_more_exploration: false,
         };
       }
 
@@ -165,28 +165,25 @@ const SocrateApp = () => {
         );
         setProblems((prev) => [...prev, ...newProblems]);
       }
-    } catch (error) { // 6. Correzione dei catch
-        let errorMsg = "Errore sconosciuto";
-        if (error instanceof Error) {
-         errorMsg = error.message;
-       } else if (typeof error === "string") {
-       errorMsg = error;
-     }
-     setConversation((prev) => [
-       ...prev,
-       {
-         role: "assistant",
-         content: `Mi dispiace, si è verificato un errore: ${errorMsg}. Verifica la tua API key e riprova.`,
-         identified_problems: [],
-           needs_more_exploration: false,
-      },
-     ]);
+    } catch (error) {
+      let errorMsg = "Errore sconosciuto";
+      if (error instanceof Error) {
+        errorMsg = error.message;
+      } else if (typeof error === "string") {
+        errorMsg = error;
+      }
+      setConversation((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `Mi dispiace, si è verificato un errore: ${errorMsg}.`,
+        },
+      ]);
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
-  // 4. Tipizzazione dei parametri delle funzioni
   const handleProblemEdit = (problem: Problem) => {
     setEditingProblem(problem.id);
     setTempProblemText(problem.text);
@@ -227,23 +224,23 @@ const SocrateApp = () => {
     setIsLoading(true);
 
     try {
-      const prompt = `\nSei Socrate, il filosofo greco. Stai dialogando con una persona che ha questo problema: \"${
-        selectedProblem.text
-      }\"\n\nCONVERSAZIONE COMPLETA:\n${JSON.stringify(updatedChat)}\n\nCARATTERISTICHE DEL TUO APPROCCIO:\n- NON consoli. NON giudichi. NON dici cosa deve fare.\n- Ti ascolti. Osservi. Poi fai domande precise, taglienti, gentili.\n- Non serve a far stare meglio. Serve a far **pensare più a fondo**.\n- Sei un fratello maggiore, un po' severo ma giusto.\n- Credi talmente tanto nella persona da non lasciarla scappare.\n\nSTRUTTURA DEL DIALOGO - I 5 PERCHÉ:\n1. Dopo ogni risposta, non ripeti meccanicamente "perché"\n2. Ogni domanda è una cesellatura, non un colpo di martello\n3. Esempi di transizioni:\n   - "Interessante… e perché questo per te è così importante?"\n   - "Hai mai pensato se dietro questo ci fosse qualcos'altro?"\n   - "E se fosse solo una parte della verità?"\n   - "Cosa succederebbe se non fosse così?"\n   - "Chi ti ha insegnato a pensare in questo modo?"\n   - "E se stessi solo proteggendo una parte di te?"\n\nOBIETTIVO: Portare la persona alla radice del suo pensiero entro il 4°-5° scambio.\nSpesso dietro il problema iniziale si nasconde una ferita, una paura, una credenza errata, un'abitudine protettiva.\n\nIMPORTANTE - GESTIONE DEL QUINTO PERCHÉ:\n- Se siamo al 5° scambio (dialogue_depth = 5), NON fare un'altra domanda\n- Invece, riconosci che abbiamo raggiunto il cuore del problema\n- Invita l'utente a scrivere la sua nuova consapevolezza in una frase\n- Usa questo testo: "Invita l'utente a **scrivere la sua nuova consapevolezza** in una frase. Come fosse un diario segreto. Perché una verità capita… è una verità che resta."\n\nRISPONDI CON UN JSON:\n{\n  "response": "La tua risposta socratica, una domanda penetrante ma gentile (se depth < 5) OPPURE l'invito a scrivere la consapevolezza (se depth = 5)",\n  "dialogue_depth": numero_da_1_a_5,\n  "core_insight_reached": true/false,\n  "final_reflection": "se core_insight_reached è true, una frase finale di riflessione",\n  "ask_for_insight": true/false (true se depth = 5)\n}\n\nIMPORTANTE: Parla come Socrate, in prima persona. Sii diretto ma rispettoso. NON INCLUDERE BACKTICKS O ALTRO TESTO OLTRE AL JSON.\n`;
+      const prompt = `\nSei Socrate, il filosofo greco. Stai dialogando con una persona che ha questo problema: \"${selectedProblem.text}\"\n\nCONVERSAZIONE COMPLETA:\n${JSON.stringify(updatedChat)}\n\nISTRUZIONI:\n- Fai domande precise, taglienti, ma gentili.\n- Non consolare, non giudicare, non dire cosa fare.\n- Il tuo obiettivo è far pensare la persona più a fondo.\n- Usa la tecnica dei 5 perché per arrivare alla radice del pensiero.\n- Al quinto scambio, invita l'utente a scrivere la sua nuova consapevolezza.\n\nRISPONDI SEMPRE E SOLO CON UN JSON:\n{\n  "response": "La tua risposta socratica",\n  "dialogue_depth": 1,\n  "core_insight_reached": false,\n  "final_reflection": "",\n  "ask_for_insight": false\n}\n`;
 
-      const response = await callGeminiAPI(prompt);
-      
+      const rawResponse = await callGeminiAPI(prompt);
       let socrateResponse: SocrateResponse;
 
       try {
-        const cleanResponse = response
-          .replace(/```json\n?/g, "")
-          .replace(/```\n?/g, "")
-          .trim();
-        socrateResponse = JSON.parse(cleanResponse);
-      } catch (parseError) {
+        const startIndex = rawResponse.indexOf('{');
+        const endIndex = rawResponse.lastIndexOf('}');
+        if (startIndex === -1 || endIndex === -1) {
+          throw new Error("Risposta non valida, JSON non trovato.");
+        }
+        const jsonString = rawResponse.substring(startIndex, endIndex + 1);
+        socrateResponse = JSON.parse(jsonString);
+      } catch (error) {
+        console.error("Errore di parsing JSON (Socrate):", error);
         socrateResponse = {
-          response: response,
+          response: `Ho ricevuto una risposta in un formato non valido: ${rawResponse}`,
           dialogue_depth: 1,
           core_insight_reached: false,
           ask_for_insight: false,
@@ -265,21 +262,19 @@ const SocrateApp = () => {
       if (socrateResponse.ask_for_insight) {
         setShowInsightInput(true);
       }
-    } catch (error) { // 6. Correzione dei catch
-        let errorMsg = "Errore sconosciuto";
-        if (error instanceof Error) {
-         errorMsg = error.message;
-       } else if (typeof error === "string") {
-       errorMsg = error;
-     }
+    } catch (error) {
+      let errorMsg = "Errore sconosciuto";
+      if (error instanceof Error) {
+        errorMsg = error.message;
+      } else if (typeof error === "string") {
+        errorMsg = error;
+      }
       console.error("Errore nella comunicazione con Socrate:", errorMsg);
       setSocrateChat((prev) => [
         ...prev,
         {
           role: "socrate",
           content: `Mi dispiace, qualcosa è andato storto: ${errorMsg}`,
-          dialogue_depth: 1,
-          core_insight_reached: false,
         },
       ]);
     } finally {
@@ -306,11 +301,9 @@ const SocrateApp = () => {
       ...prev,
       {
         role: "socrate",
-        content: `Perfetto. Ora che hai scritto la tua consapevolezza, è diventata parte di te. Ricorda: \"La saggezza inizia nella meraviglia.\" \n\nSe vuoi, puoi continuare a parlare con me o riflettere su quello che hai scoperto.`,
+        content: `Perfetto. Ora che hai scritto la tua consapevolezza, è diventata parte di te. Ricorda: \"La saggezza inizia nella meraviglia.\"`,
         dialogue_depth: 6,
         core_insight_reached: true,
-        final_reflection:
-          "Una nuova consapevolezza è stata registrata nel tuo diario interiore.",
       },
     ]);
   };
@@ -331,85 +324,32 @@ const SocrateApp = () => {
   };
 
   const generateDiaryContent = () => {
-    const now = new Date();
-    const dateStr = now.toLocaleDateString("it-IT");
-    const timeStr = now.toLocaleTimeString("it-IT");
-
     let content = `SOCRATE - DIARIO DI INTROSPEZIONE\n`;
-    content += `Data: ${dateStr} - Ora: ${timeStr}\n`;
+    content += `Data: ${new Date().toLocaleDateString("it-IT")} - Ora: ${new Date().toLocaleTimeString("it-IT")}\n`;
     content += `${"=".repeat(50)}\n\n`;
 
     content += `📋 PROBLEMI IDENTIFICATI (${problems.length})\n`;
-    content += `${"=".repeat(30)}\n\n`;
-
-    if (problems.length === 0) {
-      content += `Nessun problema identificato ancora.\n\n`;
+    content += `${"-".repeat(30)}\n`;
+    if (problems.length > 0) {
+      problems.forEach((p, i) => {
+        content += `${i + 1}. ${p.text}\n   (Creato: ${new Date(p.createdAt).toLocaleString("it-IT")})\n\n`;
+      });
     } else {
-      problems.forEach((problem, index) => {
-        content += `${index + 1}. ${problem.text}\n`;
-        content += `   Status: ${problem.status}\n`;
-        content += `   Creato: ${new Date(problem.createdAt).toLocaleString(
-          "it-IT"
-        )}\n\n`;
-      });
+      content += `Nessun problema identificato ancora.\n\n`;
     }
 
-    if (conversation.length > 0) {
-      content += `💭 CONVERSAZIONE - TROVA IL PROBLEMA\n`;
-      content += `${"=".repeat(40)}\n\n`;
-
-      conversation.forEach((message) => {
-        const speaker =
-          message.role === "user" ? "TU" : "CLAUDE (Root Cause Analysis)";
-        content += `[${speaker}]: ${message.content}\n`;
-
-        if (
-          message.identified_problems &&
-          message.identified_problems.length > 0
-        ) {
-          content += `   → Problemi identificati: ${message.identified_problems.join(
-            ", "
-          )}\n`;
-        }
-        content += `\n`;
-      });
-    }
-
-    if (socrateChat.length > 0) {
-      content += `🏛️ DIALOGO CON SOCRATE\n`;
-      content += `${"=".repeat(25)}\n\n`;
-
-      if (selectedProblem) {
-        content += `Problema discusso: \"${selectedProblem.text}\"\n\n`;
-      }
-
-      socrateChat.forEach((message) => {
-        const speaker = message.role === "user" ? "TU" : "SOCRATE";
-        content += `[${speaker}]: ${message.content}\n`;
-
-        if (message.final_reflection) {
-          content += `   💡 RIFLESSIONE FINALE: ${message.final_reflection}\n`;
-        }
-        content += `\n`;
-      });
-    }
-
+    content += `✨ CONSAPEVOLEZZE RAGGIUNTE (${insights.length})\n`;
+    content += `${"-".repeat(35)}\n`;
     if (insights.length > 0) {
-      content += `✨ CONSAPEVOLEZZE RAGGIUNTE (${insights.length})\n`;
-      content += `${"=".repeat(35)}\n\n`;
-
-      insights.forEach((insight, index) => {
-        content += `${index + 1}. \"${insight.text}\"\n`;
-        content += `   Problema: ${insight.problemText}\n`;
-        content += `   Data: ${new Date(insight.createdAt).toLocaleString(
-          "it-IT"
-        )}\n\n`;
+      insights.forEach((i, index) => {
+        content += `${index + 1}. \"${i.text}\"\n   (Relativo a: \"${i.problemText}\")\n   (Data: ${new Date(i.createdAt).toLocaleString("it-IT")})\n\n`;
       });
+    } else {
+      content += `Nessuna consapevolezza raggiunta ancora.\n\n`;
     }
 
     content += `\n${"=".repeat(50)}\n`;
-    content += `Fine del diario - Continua il tuo viaggio di conoscenza di te stesso.\n`;
-    content += `\"Una vita senza ricerca non è degna di essere vissuta\" - Socrate\n`;
+    content += `Fine del diario - \"Una vita senza ricerca non è degna di essere vissuta\" - Socrate\n`;
 
     return content;
   };
@@ -420,21 +360,14 @@ const SocrateApp = () => {
       await navigator.clipboard.writeText(diaryContent);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (error) { // 6. Correzione dei catch
-      let errorMsg = "Errore sconosciuto";
-      if (error instanceof Error) {
-        errorMsg = error.message;
-      } else if (typeof error === "string") {
-        errorMsg = error;
-      }
-      console.error("Errore nel copiare il diario:", errorMsg);
+    } catch (error) {
+      console.error("Errore nel copiare il diario:", error);
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
+      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex items-center justify-between py-4">
             <h1 className="text-2xl font-bold text-gray-800">Socrate</h1>
@@ -445,20 +378,14 @@ const SocrateApp = () => {
                 title="Visualizza il tuo diario di introspezione"
               >
                 <Download size={16} />
-                <span className="text-sm font-medium">Visualizza Diario</span>
+                <span className="text-sm font-medium">Diario</span>
               </button>
               <div className="text-sm text-orange-600 font-medium">
                 Conosci te stesso
               </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Navigation */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="flex space-x-8">
+          <nav className="flex space-x-8">
             <button
               onClick={() => setActiveTab("trova")}
               className={`py-4 px-2 border-b-2 font-medium text-sm ${
@@ -469,7 +396,7 @@ const SocrateApp = () => {
             >
               <div className="flex items-center space-x-2">
                 <Brain size={16} />
-                <span>Trova il tuo problema</span>
+                <span>Trova Problema</span>
               </div>
             </button>
             <button
@@ -498,12 +425,11 @@ const SocrateApp = () => {
                 <span>Parla con Socrate</span>
               </div>
             </button>
-          </div>
+          </nav>
         </div>
-      </div>
+      </header>
 
-      {/* Main Content */}
-      <div className="flex-1 max-w-6xl mx-auto w-full px-4 py-8">
+      <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8">
         {activeTab === "diario" && (
           <div className="max-w-4xl mx-auto">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -511,61 +437,31 @@ const SocrateApp = () => {
                 <h2 className="text-xl font-semibold text-gray-800">
                   Il tuo Diario di Introspezione
                 </h2>
-                <div className="flex items-center space-x-3">
-                  <button
-                    onClick={copyDiary}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                      copied
-                        ? "bg-green-500 text-white"
-                        : "bg-blue-500 text-white hover:bg-blue-600"
-                    }`}
-                  >
-                    {copied ? <Check size={16} /> : <Copy size={16} />}
-                    <span className="text-sm font-medium">
-                      {copied ? "Copiato!" : "Copia Diario"}
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("trova")}
-                    className="flex items-center space-x-2 text-orange-500 hover:text-orange-700 transition-colors"
-                  >
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 19l-7-7 7-7"
-                      />
-                    </svg>
-                    <span className="text-sm">Torna alla Homepage</span>
-                  </button>
-                </div>
+                <button
+                  onClick={copyDiary}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                    copied
+                      ? "bg-green-500 text-white"
+                      : "bg-blue-500 text-white hover:bg-blue-600"
+                  }`}
+                >
+                  {copied ? <Check size={16} /> : <Copy size={16} />}
+                  <span className="text-sm font-medium">
+                    {copied ? "Copiato!" : "Copia Diario"}
+                  </span>
+                </button>
               </div>
-
-              <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm text-gray-800 whitespace-pre-wrap max-h-96 overflow-y-auto">
+              <pre className="bg-gray-50 rounded-lg p-4 font-mono text-sm text-gray-800 whitespace-pre-wrap max-h-[60vh] overflow-y-auto">
                 {generateDiaryContent()}
-              </div>
+              </pre>
             </div>
           </div>
         )}
 
         {activeTab === "trova" && (
           <div className="max-w-3xl mx-auto">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-              <h2 className="text-xl font-semibold mb-4 text-gray-800">
-                Trova il tuo problema
-              </h2>
-              <p className="text-gray-600 mb-6">
-                Racconta quello che senti. Io ti aiuterò a trovare il vero
-                problema alla radice.
-              </p>
-
-              <div className="space-y-4 mb-6 max-h-96 overflow-y-auto">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="space-y-4 mb-6 max-h-[60vh] overflow-y-auto pr-4">
                 {conversation.map((message, index) => (
                   <div
                     key={index}
@@ -583,9 +479,11 @@ const SocrateApp = () => {
                       {message.content}
                       {message.identified_problems &&
                         message.identified_problems.length > 0 && (
-                          <div className="mt-2 text-xs opacity-75">
-                            ✓ {message.identified_problems.length} problema/i
-                            identificato/i
+                          <div className="mt-2 pt-2 border-t border-black/20 text-xs opacity-90">
+                            <b>Problemi identificati:</b>
+                            <ul className="list-disc pl-4 mt-1">
+                              {message.identified_problems.map((p, i) => <li key={i}>{p}</li>)}
+                            </ul>
                           </div>
                         )}
                     </div>
@@ -600,8 +498,7 @@ const SocrateApp = () => {
                 )}
                 <div ref={chatEndRef} />
               </div>
-
-              <div className="flex space-x-2">
+              <div className="flex space-x-2 pt-4 border-t">
                 <input
                   type="text"
                   value={userMessage}
@@ -609,6 +506,7 @@ const SocrateApp = () => {
                   onKeyPress={(e) => handleKeyPress(e, "trova")}
                   placeholder="Descrivi quello che senti, cosa ti blocca..."
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  disabled={isLoading}
                 />
                 <button
                   onClick={handleSendMessage}
@@ -622,8 +520,7 @@ const SocrateApp = () => {
           </div>
         )}
 
-        {
-          activeTab === "problemi" && (
+        {activeTab === "problemi" && (
           <div className="max-w-4xl mx-auto">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h2 className="text-xl font-semibold mb-4 text-gray-800">
@@ -639,7 +536,7 @@ const SocrateApp = () => {
                   {problems.map((problem) => (
                     <div
                       key={problem.id}
-                      className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50"
+                      className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
                     >
                       <div className="flex items-start space-x-3">
                         <Heart
@@ -715,17 +612,8 @@ const SocrateApp = () => {
 
         {activeTab === "socrate" && (
           <div className="max-w-3xl mx-auto">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-              <h2 className="text-xl font-semibold mb-4 text-gray-800">
-                Dialogo con Socrate
-              </h2>
-              {selectedProblem && (
-                <p className="text-gray-600 mb-6">
-                  Problema: "{selectedProblem.text}"
-                </p>
-              )}
-
-              <div className="space-y-4 mb-6 max-h-96 overflow-y-auto">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="space-y-4 mb-6 max-h-[60vh] overflow-y-auto pr-4">
                 {socrateChat.length === 0 ? (
                   <div className="text-center text-gray-500 py-8">
                     Seleziona un problema dalla sezione "I Problemi" per
@@ -786,34 +674,13 @@ const SocrateApp = () => {
                 <div ref={socrateChatEndRef} />
               </div>
 
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  value={socrateInput}
-                  onChange={(e) => setSocrateInput(e.target.value)}
-                  onKeyPress={(e) => handleKeyPress(e, "socrate")}
-                  placeholder="Rispondi a Socrate..."
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  disabled={!selectedProblem}
-                />
-                <button
-                  onClick={handleSocrateSend}
-                  disabled={isLoading || !selectedProblem}
-                  className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50"
-                >
-                  <Send size={16} />
-                </button>
-              </div>
-
-              {/* Input per la consapevolezza */}
-              {showInsightInput && (
-                <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              {showInsightInput ? (
+                <div className="mt-4 pt-4 border-t">
                   <h3 className="text-lg font-semibold text-blue-800 mb-2">
                     ✨ Scrivi la tua nuova consapevolezza
                   </h3>
                   <p className="text-sm text-blue-600 mb-3">
-                    Come fosse un diario segreto. Perché una verità capita… è
-                    una verità che resta.
+                    Una verità capita… è una verità che resta.
                   </p>
                   <div className="flex space-x-2">
                     <input
@@ -832,11 +699,30 @@ const SocrateApp = () => {
                     </button>
                   </div>
                 </div>
+              ) : (
+                <div className="flex space-x-2 pt-4 border-t">
+                  <input
+                    type="text"
+                    value={socrateInput}
+                    onChange={(e) => setSocrateInput(e.target.value)}
+                    onKeyPress={(e) => handleKeyPress(e, "socrate")}
+                    placeholder="Rispondi a Socrate..."
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    disabled={!selectedProblem || isLoading}
+                  />
+                  <button
+                    onClick={handleSocrateSend}
+                    disabled={isLoading || !selectedProblem}
+                    className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50"
+                  >
+                    <Send size={16} />
+                  </button>
+                </div>
               )}
             </div>
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 };
